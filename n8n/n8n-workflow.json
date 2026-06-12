@@ -1,0 +1,92 @@
+{
+  "name": "Alcovia Focus Session Notification",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alcovia",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "alcovia-session-webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"event\"]}}",
+              "value2": "session_success"
+            }
+          ]
+        }
+      },
+      "name": "Is Session Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Deduplicate by sessionId\n// n8n built-in static data persists across executions\nconst processedSessions = this.getWorkflowStaticData('global');\n\nif (!processedSessions.seen) {\n  processedSessions.seen = {};\n}\n\nconst sessionId = $input.first().json.sessionId;\n\nif (processedSessions.seen[sessionId]) {\n  // Already processed — return empty to stop execution\n  return [];\n}\n\n// Mark as processed\nprocessedSessions.seen[sessionId] = true;\n\n// Pass through\nreturn $input.all();"
+      },
+      "name": "Deduplicate by sessionId",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3001/webhook/notification-log",
+        "method": "POST",
+        "bodyParametersUi": {
+          "parameter": []
+        },
+        "jsonParameters": true,
+        "bodyParametersJson": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "name": "Send Notification (mock)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"ok\": true}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [{ "node": "Is Session Success?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Session Success?": {
+      "main": [
+        [{ "node": "Deduplicate by sessionId", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Deduplicate by sessionId": {
+      "main": [
+        [{ "node": "Send Notification (mock)", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Notification (mock)": {
+      "main": [
+        [{ "node": "Respond to Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}
